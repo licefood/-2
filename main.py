@@ -5,30 +5,42 @@ import matplotlib.pyplot as plt
 import os
 
 
-def h_func(n, x):
-    return spherical_jn(n, x) + 1j * spherical_yn(n, x)
+class RCS:
+
+    def __init__(self, r):
+        self.r = r
+
+    def calculate_rcs(self, f):
+        w = 3e8 / f
+        k = 2 * np.pi / w
+        kr = k * self.r
+
+        def h_func(n, x):
+            return spherical_jn(n, x) + 1j * spherical_yn(n, x)
+
+        def a_func(n, kr):
+            return spherical_jn(n, kr) / h_func(n, kr)
+
+        def b_func(n, kr):
+            b = kr * spherical_jn(n - 1, kr) - n * spherical_jn(n, kr)
+            d = kr * h_func(n - 1, kr) - n * h_func(n, kr)
+            return b / d
+
+        result = 0
+        for n in range(1, 30):
+            term = ((-1) ** n) * (n + 0.5) * (b_func(n, kr) - a_func(n, kr))
+            result += term
+
+        return (w ** 2 / np.pi) * (np.abs(result) ** 2)
 
 
-def a_func(n, kr):
-    return spherical_jn(n, kr) / h_func(n, kr)
+class vivod:
 
-
-def b_func(n, kr):
-    b_numerator = kr * spherical_jn(n-1, kr) - n * spherical_jn(n, kr)
-    b_denominator = kr * h_func(n-1, kr) - n * h_func(n, kr)
-    return b_numerator / b_denominator
-
-
-def a(r, f):
-    w = 3e8 / f
-    k = 2 * np.pi / w
-    kr = k * r
-    result = 0
-    for n in range(1, 30):
-        term = ((-1) ** n) * (n + 0.5) * (b_func(n, kr) - a_func(n, kr))
-        result += term
-
-    return (w ** 2 / np.pi) * (np.abs(result) ** 2)
+    def save(filename, f_values, results):
+        with open(filename, 'w') as file:
+            file.write('     f            rcs\n')
+            for x, y in zip(f_values, results):
+                file.write(f'{x:.4f}    {y:.4f}\n')
 
 
 url = "https://jenyay.net/uploads/Student/Modelling/task_rcs_02.txt"
@@ -39,36 +51,28 @@ with open('file.txt', 'wb') as file:
 with open('file.txt') as f:
     M = f.read().split()
 
-D = float(M[33].strip('D=;'))
-fmin = float(M[34].strip('fmin=;'))
-fmax = float(M[35].strip('fmax=;'))
+D = float(M[38])
+fmin = float(M[39])
+fmax = float(M[40])
+
 
 f = np.linspace(fmin,fmax,500)
-r = D / 2
+rcs_calculator = RCS(D / 2)
+r = []
 
-F = []
-L = []
-rcs = []
-
-for f1 in f:
-    V = a(r, f1)
-    F.append(f1)
-    L.append(3e8 / f1)
-    rcs.append(V)
+for F in f:
+    rcs = rcs_calculator.calculate_rcs(F)
+    r.append(rcs)
 
 if not os.path.exists('results'):
     os.makedirs('results')
 
-with open('results/rcs.txt', 'w') as file:
-    file.write('f    rcs\n')
-    for x, y in zip(F, rcs):
-        file.write(f'{x:.4f}    {y:.4f}\n')
+vivod.save('results/results.txt', f, r)
 
 plt.figure(figsize=(16, 9))
-plt.plot(F, rcs, label='f(x)', color='g')
+plt.plot(f, r, label='f(x)', color='g')
 plt.title('График')
 plt.xlabel('F')
 plt.ylabel('rcs')
 plt.grid(True)
-plt.legend()
 plt.show()
